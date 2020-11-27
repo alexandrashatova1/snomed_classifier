@@ -112,10 +112,12 @@ class BioBert(nn.Module):
     self.softmax = nn.Softmax(dim=1)
     
   def forward(self, input_ids, attention_mask):
-    model_outputs = self.bert(input_ids=input_ids, attention_mask=attention_mask)
-    hidden_states = model_outputs[-1]
-    out = self.dropout(hidden_states)
-    out = self.classifier(out)
+    #https://huggingface.co/transformers/model_doc/bert.html#bertmodel
+    # last_hidden_state: Sequence of hidden-states at the output of the last layer of the model.
+    # pooler_output: Last layer hidden-state of the first token of the sequence (classification token) further processed by a Linear layer and a Tanh activation function. 
+    last_hidden_state, pooler_output = self.bert(input_ids=input_ids, attention_mask=attention_mask)
+    output = self.dropout(pooler_output)
+    out = self.classifier(output)
     return out
 
 model = BioBert(num_labels,config,new_state_dict)
@@ -160,7 +162,9 @@ def train_epoch(model, data_loader, loss_fn, optimizer, device, scheduler):
       model.zero_grad() 
 
       outputs = model(b_input_ids,b_input_mask)
-
+      outputs = F.softmax(outputs, dim=1)
+      
+      #now getting classes that have the highest probability using torch.max
       _,preds = torch.max(outputs,dim=1)
       loss = loss_fn(outputs,b_labels)
 
@@ -193,7 +197,8 @@ def eval_model(model, data_loader, loss_fn, device):
             b_input_ids, b_input_mask, b_labels = batch
         
             outputs = model(b_input_ids,b_input_mask)
-        
+            outputs = F.softmax(outputs, dim=1)
+            
             _,preds = torch.max(outputs,dim=1)
             loss = loss_fn(outputs,b_labels)
             correct_predictions += torch.sum(preds == b_labels)
